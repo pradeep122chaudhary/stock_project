@@ -1,0 +1,119 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Include Bootstrap CSS -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="{% static 'your_css_file.css' %}">
+    <title>Subscriptions</title>
+</head>
+<body>
+    <div class="container mt-5">
+        <!-- Search form at the top -->
+        <div class="card shadow mb-4">
+            <div class="card-header">
+                <h4 class="card-title">Search for a Stock</h4>
+            </div>
+            <div class="card-body">
+                <form method="POST" class="row g-3">
+                    {% csrf_token %}
+                    <div class="col-md-8">
+                        {{ search_form.as_p }}
+                    </div>
+                    <div class="col-md-4 d-grid">
+                        <button type="submit" class="btn btn-primary">Search</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        {% if search_results %}
+        <div class="card shadow">
+            <div class="card-header">
+                <h4 class="card-title">Search Results</h4>
+            </div>
+            <div class="card-body">
+                <ul class="list-group">
+                    {% for stock in search_results %}
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <span><strong>{{ stock.ticker }}</strong> - {{ stock.name }}</span>
+                            <!-- Form to add the stock to subscriptions -->
+                            <form method="POST">
+                                {% csrf_token %}
+                                <input type="hidden" name="stock_id" value="{{ stock.id }}">
+                                <button type="submit" name="add_subscription" class="btn btn-success">Add to Subscriptions</button>
+                            </form>
+                        </li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Main heading -->
+        <h1 class="text-center mb-5">Your Subscriptions</h1>
+        
+        <!-- Display the list of subscriptions -->
+        <div class="card shadow mb-4">
+            <div class="card-header">
+                <h4 class="card-title">Subscribed Stocks</h4>
+            </div>
+            <div class="card-body">
+                <ul class="list-group" id="subscription-list">
+                    {% for subscription in subscriptions %}
+                        <li class="list-group-item d-flex justify-content-between align-items-center" id="stock-{{ subscription.stock.ticker }}">
+                            <span><strong>{{ subscription.stock.ticker }}</strong> - INR- {{ subscription.stock.current_price }}</span>
+                            <!-- Form to unsubscribe from the stock -->
+                            <form method="POST" onsubmit="return confirm('Are you sure you want to unsubscribe from this stock?');">
+                                {% csrf_token %}
+                                <input type="hidden" name="stock_id" value="{{ subscription.stock.id }}">
+                                <button type="submit" name="remove_subscription" class="btn btn-danger btn-sm">Unsubscribe</button>
+                            </form>
+                        </li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- Include Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+    <script>
+        // Function to set up the WebSocket connection
+        function setupWebSocket() {
+            const tickers = [{% for subscription in subscriptions %} '{{ subscription.stock.ticker }}'{% if not forloop.last %}, {% endif %}{% endfor %}];
+            const socket = new WebSocket(`ws://${window.location.host}/ws/stocks/${tickers.join(',')}/`);
+
+            // Handle incoming messages from the WebSocket
+            socket.onmessage = function(event) {
+                const data = JSON.parse(event.data);
+                const stockItem = document.getElementById(`stock-${data.ticker}`);
+                if (stockItem) {
+                    stockItem.innerHTML = `<strong>${data.ticker}</strong> - INR- ${data.price}`;
+                }
+            };
+
+            // Handle WebSocket connection open
+            socket.onopen = function() {
+                console.log('WebSocket connection opened');
+            };
+
+            // Handle WebSocket connection close
+            socket.onclose = function() {
+                console.log('WebSocket connection closed');
+            };
+
+            // Handle WebSocket errors
+            socket.onerror = function(error) {
+                console.error('WebSocket error:', error);
+            };
+        }
+
+        // Call the setup function to initiate WebSocket connection
+        setupWebSocket();
+    </script>
+</body>
+</html>
